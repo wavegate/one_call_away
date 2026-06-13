@@ -9,9 +9,21 @@ A mobile-first web app that helps someone in recovery or distress reach trusted 
 1. Open the app on your phone (Chrome recommended)
 2. Press and hold **Hold for Help**
 3. Say: *"I'm feeling urges and I'm concerned I'm going to use."*
-4. Agent responds and contacts your Circle via Twilio
-5. Your phone rings with the supporter message
-6. Roleplay calling back as the friend
+4. Grok Voice responds and calls `notify_circle` → Twilio rings your supporter
+5. Answer → hear Frank's message → roleplay calling back
+
+## Voice Agent (Grok Voice)
+
+This app uses the **xAI Realtime Voice API** for the support coordinator. The API key stays server-side; the browser receives short-lived session tokens.
+
+1. Create an API key at [console.x.ai](https://console.x.ai) with the **Voice** endpoint enabled
+2. Add to `.env.local`:
+   ```
+   XAI_API_KEY=xai-...
+   ```
+3. Restart the dev server
+
+The agent calls the `notify_circle` tool when escalation is needed, which triggers the Twilio call to your supporter.
 
 ## Quick Start
 
@@ -35,7 +47,7 @@ Copy `.env.example` to `.env.local`:
 | `TWILIO_FROM_NUMBER` | For live calls | Your Twilio phone number |
 | `SUPPORTER_PHONE` | For live calls | Demo supporter's phone (E.164, e.g. `+15551234567`) |
 | `NEXT_PUBLIC_APP_URL` | For Twilio webhooks | Public URL (ngrok or Vercel) |
-| `XAI_API_KEY` | Optional | xAI Grok for smarter escalation decisions |
+| `XAI_API_KEY` | **Required** | xAI API key with Voice endpoint (from [console.x.ai](https://console.x.ai)) |
 | `DEMO_MEMBER_NAME` | Optional | Member name (default: Frank) |
 
 Without Twilio credentials, the app runs in **demo mode** — the full UI and voice flow work, but no outbound call is placed.
@@ -43,8 +55,8 @@ Without Twilio credentials, the app runs in **demo mode** — the full UI and vo
 ## Architecture
 
 - **Next.js** — mobile-first UI
-- **Web Speech API** — voice input and agent TTS response in the browser
-- **Grok (xAI)** — optional escalation coordinator (rule-based fallback built in)
+- **Grok Voice (xAI Realtime API)** — voice coordinator with `notify_circle` tool
+- **Web Audio + AudioWorklet** — PCM capture and playback at 24 kHz
 - **Twilio** — outbound call to supporter with spoken transcript
 
 ## Twilio Setup

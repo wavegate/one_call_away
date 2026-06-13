@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
 
   twiml.say(
     { voice: "Polly.Joanna" },
-    `This is One Call Away. ${supporterMessage}`
+    `This is My Circle. ${supporterMessage}`
   );
 
   twiml.pause({ length: 1 });

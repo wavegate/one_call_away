@@ -41,7 +41,7 @@ async function grokDecision(transcript: string): Promise<AgentDecision | null> {
   const apiKey = process.env.XAI_API_KEY;
   if (!apiKey) return null;
 
-  const systemPrompt = `You are the escalation coordinator for One Call Away — not a therapist.
+  const systemPrompt = `You are the escalation coordinator for My Circle — not a therapist.
 Analyze the member's message and return ONLY valid JSON with this shape:
 {
   "urgency": "low" | "medium" | "high",

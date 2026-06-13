@@ -8,13 +8,13 @@ const geistSans = Geist({
 });
 
 export const metadata: Metadata = {
-  title: "One Call Away",
+  title: "My Circle",
   description:
-    "One button between you and trusted human support. Voice-first support coordinator for moments of distress.",
+    "One circle between you and trusted human support. Voice-first coordinator for moments of distress.",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "One Call Away",
+    title: "My Circle",
   },
 };
 

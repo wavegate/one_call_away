@@ -26,3 +26,12 @@ export interface EscalationResult {
   callSid?: string;
   error?: string;
 }
+
+export interface CircleMember {
+  id: string;
+  name: string;
+  relationship: string;
+  phone: string;
+}
+
+export type CircleMemberInput = Omit<CircleMember, "id">;

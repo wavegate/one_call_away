@@ -1,52 +1,24 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AgentResponse } from "@/components/AgentResponse";
 import { EscalationStatus } from "@/components/EscalationStatus";
 import { HelpButton } from "@/components/HelpButton";
-import { SafetyFooter } from "@/components/SafetyFooter";
+import { MyCircleFooter } from "@/components/MyCircleFooter";
 import { VoiceSession } from "@/components/VoiceSession";
-import { useVoiceSession } from "@/hooks/useVoiceSession";
-import type { AgentDecision, AppState, EscalationStep } from "@/lib/types";
-
-const DEMO_TRANSCRIPT =
-  "I'm feeling urges and I'm concerned I'm going to use.";
-
-const HOLDING_LINES = [
-  "I'm contacting your support person now.",
-  "Stay with me for the next minute.",
-  "Take one slow breath.",
-  "You do not have to handle this alone.",
-];
+import {
+  useGrokVoiceAgent,
+  type NotifyCirclePayload,
+} from "@/hooks/useGrokVoiceAgent";
+import type { EscalationStep } from "@/lib/types";
 
 export default function Home() {
-  const [appState, setAppState] = useState<AppState>("idle");
-  const [agentDecision, setAgentDecision] = useState<AgentDecision | null>(
-    null
-  );
   const [escalationStep, setEscalationStep] =
     useState<EscalationStep>("contacting");
+  const [hasEscalated, setHasEscalated] = useState(false);
   const [twilioConfigured, setTwilioConfigured] = useState(false);
-  const [isSpeaking, setIsSpeaking] = useState(false);
   const holdingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
     null
   );
-
-  const {
-    transcript,
-    isListening,
-    isSupported,
-    startListening,
-    stopListening,
-    speak,
-  } = useVoiceSession();
-
-  useEffect(() => {
-    fetch("/api/config")
-      .then((r) => r.json())
-      .then((data) => setTwilioConfigured(data.twilioConfigured))
-      .catch(() => setTwilioConfigured(false));
-  }, []);
 
   const advanceEscalation = useCallback(() => {
     const steps: EscalationStep[] = [
@@ -56,108 +28,74 @@ export default function Home() {
       "waiting",
     ];
     let index = 0;
-
     setEscalationStep("contacting");
 
-    const interval = setInterval(() => {
+    return setInterval(() => {
       index += 1;
       if (index < steps.length) {
         setEscalationStep(steps[index]);
       } else {
-        clearInterval(interval);
-        setAppState("waiting");
+        if (holdingIntervalRef.current) {
+          clearInterval(holdingIntervalRef.current);
+          holdingIntervalRef.current = null;
+        }
       }
     }, 2500);
-
-    return interval;
   }, []);
 
-  const processTranscript = useCallback(
-    async (finalTranscript: string) => {
-      setAppState("processing");
-
-      const text = finalTranscript.trim() || DEMO_TRANSCRIPT;
-
-      try {
-        const agentRes = await fetch("/api/agent", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ transcript: text }),
-        });
-        const decision: AgentDecision = await agentRes.json();
-        setAgentDecision(decision);
-        setAppState("responding");
-        setIsSpeaking(true);
-
-        await speak(decision.memberResponse);
-        setIsSpeaking(false);
-
-        if (decision.needsHuman && decision.escalationPath === "call_supporter") {
-          setAppState("escalating");
-          holdingIntervalRef.current = advanceEscalation();
-
-          await fetch("/api/escalate", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              transcript: text,
-              supporterMessage: decision.supporterMessage,
-            }),
-          });
-
-          let holdingIndex = 0;
-          const holdingTimer = setInterval(async () => {
-            if (holdingIndex < HOLDING_LINES.length) {
-              setIsSpeaking(true);
-              await speak(HOLDING_LINES[holdingIndex]);
-              setIsSpeaking(false);
-              holdingIndex += 1;
-            } else {
-              clearInterval(holdingTimer);
-            }
-          }, 4000);
-        } else {
-          setTimeout(() => {
-            setAppState("idle");
-            setAgentDecision(null);
-          }, 3000);
-        }
-      } catch {
-        setAppState("idle");
+  const handleEscalation = useCallback(
+    (_payload: NotifyCirclePayload) => {
+      setHasEscalated(true);
+      if (holdingIntervalRef.current) {
+        clearInterval(holdingIntervalRef.current);
       }
+      holdingIntervalRef.current = advanceEscalation();
     },
-    [speak, advanceEscalation]
+    [advanceEscalation]
   );
 
-  const handlePressStart = useCallback(() => {
-    if (appState !== "idle") return;
-    setAppState("listening");
-    startListening();
-  }, [appState, startListening]);
+  const {
+    status,
+    isListening,
+    userTranscript,
+    assistantTranscript,
+    micLevel,
+    error,
+    isAssistantSpeaking,
+    toggle,
+    disconnect,
+  } = useGrokVoiceAgent({
+    memberName: "Frank",
+    onEscalation: handleEscalation,
+  });
 
-  const handlePressEnd = useCallback(() => {
-    if (appState !== "listening") return;
-    const final = stopListening();
-    processTranscript(final);
-  }, [appState, stopListening, processTranscript]);
+  useEffect(() => {
+    fetch("/api/config")
+      .then((r) => r.json())
+      .then((data) => setTwilioConfigured(data.twilioConfigured))
+      .catch(() => setTwilioConfigured(false));
+  }, []);
 
   const handleReset = () => {
     if (holdingIntervalRef.current) {
       clearInterval(holdingIntervalRef.current);
+      holdingIntervalRef.current = null;
     }
-    window.speechSynthesis?.cancel();
-    setAppState("idle");
-    setAgentDecision(null);
+    disconnect();
+    setHasEscalated(false);
     setEscalationStep("contacting");
   };
+
+  const showVoiceSession = isListening && !hasEscalated;
+  const showEscalation = hasEscalated;
 
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col bg-gradient-to-b from-slate-50 via-teal-50/30 to-slate-100">
       <header className="px-6 pt-12 pb-6 text-center">
         <h1 className="text-2xl font-semibold tracking-tight text-slate-800">
-          One Call Away
+          My Circle
         </h1>
-        {(appState === "waiting" || appState === "escalating") && (
+        {hasEscalated && (
           <button
             onClick={handleReset}
             className="mt-3 text-xs text-slate-400 underline"
@@ -168,41 +106,44 @@ export default function Home() {
       </header>
 
       <div className="flex flex-1 flex-col">
-        {appState === "idle" && (
+        {!showVoiceSession && !showEscalation && (
           <div className="flex flex-1 flex-col items-center justify-center px-6">
             <HelpButton
-              onPressStart={handlePressStart}
-              onPressEnd={handlePressEnd}
+              onToggle={toggle}
               isActive={false}
+              disabled={status === "connecting"}
             />
-            {!isSupported && (
-              <p className="mt-6 text-center text-xs text-amber-600">
-                Voice not supported in this browser. Use Chrome on mobile for
-                best results.
+            {error && (
+              <p className="mt-6 text-center text-sm text-amber-700">{error}</p>
+            )}
+            {status === "connecting" && (
+              <p className="mt-4 text-center text-sm text-slate-500">
+                Connecting...
               </p>
             )}
           </div>
         )}
 
-        {appState === "listening" && (
-          <VoiceSession transcript={transcript} />
-        )}
-
-        {appState === "processing" && (
-          <div className="flex flex-1 flex-col items-center justify-center px-6">
-            <div className="h-10 w-10 animate-spin rounded-full border-2 border-teal-200 border-t-teal-600" />
-            <p className="mt-4 text-sm text-slate-500">Understanding...</p>
+        {showVoiceSession && (
+          <div className="flex flex-1 flex-col">
+            <VoiceSession
+              userTranscript={userTranscript}
+              assistantTranscript={assistantTranscript}
+              micLevel={micLevel}
+              isAssistantSpeaking={isAssistantSpeaking}
+            />
+            <div className="flex justify-center pb-8">
+              <HelpButton onToggle={toggle} isActive />
+            </div>
+            {error && (
+              <p className="px-6 pb-4 text-center text-sm text-amber-700">
+                {error}
+              </p>
+            )}
           </div>
         )}
 
-        {appState === "responding" && agentDecision && (
-          <AgentResponse
-            response={agentDecision.memberResponse}
-            isSpeaking={isSpeaking}
-          />
-        )}
-
-        {(appState === "escalating" || appState === "waiting") && (
+        {showEscalation && (
           <EscalationStatus
             currentStep={escalationStep}
             twilioConfigured={twilioConfigured}
@@ -210,7 +151,7 @@ export default function Home() {
         )}
       </div>
 
-      <SafetyFooter />
+      <MyCircleFooter />
     </main>
   );
 }

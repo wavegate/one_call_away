@@ -1,4 +1,5 @@
 import twilio from "twilio";
+import { getCallableCircleMembers } from "./circle-store";
 import { APP_BASE_URL, SUPPORTER_PHONE, TWILIO_FROM_NUMBER } from "./config";
 
 export function getTwilioClient() {
@@ -12,12 +13,19 @@ export function getTwilioClient() {
   return twilio(accountSid, authToken);
 }
 
+export function getCirclePhoneNumbers(): string[] {
+  const fromCircle = getCallableCircleMembers().map((m) => m.phone.trim());
+  if (fromCircle.length > 0) return fromCircle;
+  if (SUPPORTER_PHONE) return [SUPPORTER_PHONE];
+  return [];
+}
+
 export function isTwilioConfigured(): boolean {
   return Boolean(
     process.env.TWILIO_ACCOUNT_SID &&
       process.env.TWILIO_AUTH_TOKEN &&
       TWILIO_FROM_NUMBER &&
-      SUPPORTER_PHONE
+      getCirclePhoneNumbers().length > 0
   );
 }
 

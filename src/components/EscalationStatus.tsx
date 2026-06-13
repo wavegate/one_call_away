@@ -1,7 +1,7 @@
 import type { EscalationStep } from "@/lib/types";
 
 const STEPS: { key: EscalationStep; label: string }[] = [
-  { key: "contacting", label: "I'm contacting your Circle now." },
+  { key: "contacting", label: "I'm contacting My Circle now." },
   { key: "calling", label: "Calling support person..." },
   { key: "delivered", label: "Message delivered." },
   { key: "waiting", label: "Waiting for callback." },
