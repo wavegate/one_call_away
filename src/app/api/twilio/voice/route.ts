@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import twilio from "twilio";
+import { DEMO_MEMBER_NAME } from "@/lib/config";
+import { getEscalationSession } from "@/lib/escalation-store";
 import { buildConfirmUrl } from "@/lib/twilio";
 
 const VoiceResponse = twilio.twiml.VoiceResponse;
@@ -59,20 +61,34 @@ function buildTwiml(params: {
   return twiml.toString();
 }
 
-function getParams(request: NextRequest) {
+async function resolveVoiceParams(request: NextRequest) {
   const { searchParams } = new URL(request.url);
+  const sessionId = searchParams.get("sessionId") ?? "";
+
+  if (sessionId) {
+    const session = await getEscalationSession(sessionId);
+    if (session) {
+      return {
+        memberName: session.memberName,
+        supporterMessage: session.supporterMessage,
+        sessionId: session.id,
+        memberPhone: session.memberPhone,
+      };
+    }
+  }
+
   return {
-    memberName: searchParams.get("memberName") ?? "Frank",
+    memberName: searchParams.get("memberName") ?? DEMO_MEMBER_NAME,
     supporterMessage:
       searchParams.get("supporterMessage") ??
       "They need someone to talk to as soon as possible.",
-    sessionId: searchParams.get("sessionId") ?? "",
+    sessionId,
     memberPhone: searchParams.get("memberPhone") ?? "",
   };
 }
 
 export async function GET(request: NextRequest) {
-  const params = getParams(request);
+  const params = await resolveVoiceParams(request);
   const xml = buildTwiml(params);
 
   return new NextResponse(xml, {
@@ -81,7 +97,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const params = getParams(request);
+  const params = await resolveVoiceParams(request);
   const xml = buildTwiml(params);
 
   return new NextResponse(xml, {

@@ -30,19 +30,9 @@ export async function isTwilioConfigured(): Promise<boolean> {
   );
 }
 
-export function buildVoiceUrl(params: {
-  transcript: string;
-  memberName: string;
-  supporterMessage: string;
-  sessionId: string;
-  memberPhone: string;
-}) {
+export function buildVoiceUrl(sessionId: string) {
   const url = new URL("/api/twilio/voice", APP_BASE_URL);
-  url.searchParams.set("transcript", params.transcript);
-  url.searchParams.set("memberName", params.memberName);
-  url.searchParams.set("supporterMessage", params.supporterMessage);
-  url.searchParams.set("sessionId", params.sessionId);
-  url.searchParams.set("memberPhone", params.memberPhone);
+  url.searchParams.set("sessionId", sessionId);
   return url.toString();
 }
 

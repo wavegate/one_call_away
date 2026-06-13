@@ -7,11 +7,24 @@ export const SUPPORTER_PHONE =
 
 export const TWILIO_FROM_NUMBER = process.env.TWILIO_FROM_NUMBER ?? "";
 
-export const APP_BASE_URL =
-  process.env.NEXT_PUBLIC_APP_URL ??
-  (process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : "http://localhost:3000");
+function resolveAppBaseUrl(): string {
+  // Twilio webhooks must hit a public URL. On Vercel, ignore NEXT_PUBLIC_APP_URL
+  // when it still points at local/ngrok dev tunnels copied from .env.
+  if (process.env.VERCEL_URL) {
+    const productionHost = process.env.VERCEL_PROJECT_PRODUCTION_URL;
+    if (productionHost) {
+      return `https://${productionHost}`;
+    }
+    return `https://${process.env.VERCEL_URL}`;
+  }
+
+  const configured = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  if (configured) return configured;
+
+  return "http://localhost:3000";
+}
+
+export const APP_BASE_URL = resolveAppBaseUrl();
 
 export const ESCALATION_KEYWORDS = [
   "urge",

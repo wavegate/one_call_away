@@ -24,13 +24,7 @@ export async function placeSupporterCall(params: {
   const call = await client.calls.create({
     to: params.to,
     from,
-    url: buildVoiceUrl({
-      transcript: params.session.transcript,
-      memberName: params.session.memberName,
-      supporterMessage: params.session.supporterMessage,
-      sessionId: params.session.id,
-      memberPhone: params.session.memberPhone,
-    }),
+    url: buildVoiceUrl(params.session.id),
     statusCallback: buildStatusUrl(params.session.id),
     statusCallbackEvent: ["initiated", "ringing", "answered", "completed"],
     statusCallbackMethod: "POST",
