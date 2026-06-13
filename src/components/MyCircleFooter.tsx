@@ -23,7 +23,7 @@ export function MyCircleFooter() {
           className="flex w-full items-center justify-between rounded-2xl border border-teal-100 bg-white/80 px-5 py-4 shadow-sm transition-colors hover:border-teal-200 hover:bg-white"
         >
           <div className="text-left">
-            <p className="text-sm font-semibold text-teal-800">Your Circle</p>
+            <p className="text-sm font-semibold text-teal-800">My Circle</p>
           </div>
           <div className="flex items-center gap-2">
             {count > 0 && (

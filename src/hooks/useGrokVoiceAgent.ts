@@ -99,6 +99,7 @@ export function useGrokVoiceAgent(options: UseGrokVoiceAgentOptions = {}) {
   const isSessionReadyRef = useRef(false);
   const intentionalDisconnectRef = useRef(false);
   const currentResponseIdRef = useRef<string | null>(null);
+  const userHasSpokenRef = useRef(false);
   const assistantTextRef = useRef("");
   const tokenExpiryRef = useRef<number>(0);
   const tokenRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
@@ -146,6 +147,7 @@ export function useGrokVoiceAgent(options: UseGrokVoiceAgentOptions = {}) {
     playbackRef.current = null;
 
     isSessionReadyRef.current = false;
+    userHasSpokenRef.current = false;
     micBufferRef.current.clear();
     currentResponseIdRef.current = null;
     setIsAssistantSpeaking(false);
@@ -202,20 +204,15 @@ export function useGrokVoiceAgent(options: UseGrokVoiceAgentOptions = {}) {
         case "session.updated": {
           if (!isSessionReadyRef.current) {
             isSessionReadyRef.current = true;
-            const buffered = micBufferRef.current.flush();
-            for (const chunk of buffered) {
-              ws.send(
-                JSON.stringify({
-                  type: "input_audio_buffer.append",
-                  audio: audioToBase64(chunk),
-                })
-              );
-            }
+            // Drop audio captured while connecting — flushing it can trigger
+            // server VAD before the member actually speaks.
+            micBufferRef.current.clear();
           }
           break;
         }
 
         case "input_audio_buffer.speech_started": {
+          userHasSpokenRef.current = true;
           playbackRef.current?.interruptPlayback();
           ws.send(JSON.stringify({ type: "response.cancel" }));
           setIsAssistantSpeaking(false);
@@ -234,7 +231,7 @@ export function useGrokVoiceAgent(options: UseGrokVoiceAgentOptions = {}) {
 
         case "conversation.item.input_audio_transcription.completed": {
           const transcript = (event.transcript as string) ?? "";
-          if (transcript) {
+          if (transcript.trim()) {
             setUserTranscript(transcript);
             addMessage("user", transcript, `user-${event.item_id ?? Date.now()}`);
           }
@@ -242,6 +239,13 @@ export function useGrokVoiceAgent(options: UseGrokVoiceAgentOptions = {}) {
         }
 
         case "response.created": {
+          if (!userHasSpokenRef.current) {
+            ws.send(JSON.stringify({ type: "response.cancel" }));
+            setIsAssistantSpeaking(false);
+            currentResponseIdRef.current = null;
+            break;
+          }
+
           const response = event.response as { id?: string } | undefined;
           assistantTextRef.current = "";
           setAssistantTranscript("");
@@ -441,6 +445,7 @@ export function useGrokVoiceAgent(options: UseGrokVoiceAgentOptions = {}) {
     setAssistantTranscript("");
     setMessages([]);
     isSessionReadyRef.current = false;
+    userHasSpokenRef.current = false;
     micBufferRef.current.clear();
 
     try {

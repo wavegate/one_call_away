@@ -84,8 +84,15 @@ export async function POST(request: NextRequest) {
       recommended_action,
     });
   } catch (error) {
-    const message =
+    const twilioError = error as { code?: number; message?: string };
+    let message =
       error instanceof Error ? error.message : "Failed to notify Circle";
+
+    if (twilioError.code === 20003 || message === "Authenticate") {
+      message =
+        "Twilio authentication failed. Check TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN in .env, then restart the dev server.";
+    }
+
     return NextResponse.json(
       { success: false, error: message },
       { status: 500 }

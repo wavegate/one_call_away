@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { EscalationStatus } from "@/components/EscalationStatus";
 import { HelpButton } from "@/components/HelpButton";
 import { MyCircleFooter } from "@/components/MyCircleFooter";
-import { VoiceSession } from "@/components/VoiceSession";
 import {
   useGrokVoiceAgent,
   type NotifyCirclePayload,
@@ -57,8 +56,6 @@ export default function Home() {
   const {
     status,
     isListening,
-    userTranscript,
-    assistantTranscript,
     micLevel,
     error,
     isAssistantSpeaking,
@@ -86,9 +83,6 @@ export default function Home() {
     setEscalationStep("contacting");
   };
 
-  const showVoiceSession = isListening && !hasEscalated;
-  const showEscalation = hasEscalated;
-
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col bg-gradient-to-b from-slate-50 via-teal-50/30 to-slate-100">
       <header className="px-6 pt-12 pb-6 text-center">
@@ -106,44 +100,23 @@ export default function Home() {
       </header>
 
       <div className="flex flex-1 flex-col">
-        {!showVoiceSession && !showEscalation && (
+        {!hasEscalated ? (
           <div className="flex flex-1 flex-col items-center justify-center px-6">
             <HelpButton
               onToggle={toggle}
-              isActive={false}
+              isActive={isListening}
+              isConnecting={status === "connecting"}
+              micLevel={micLevel}
+              isAssistantSpeaking={isAssistantSpeaking}
               disabled={status === "connecting"}
             />
             {error && (
-              <p className="mt-6 text-center text-sm text-amber-700">{error}</p>
-            )}
-            {status === "connecting" && (
-              <p className="mt-4 text-center text-sm text-slate-500">
-                Connecting...
-              </p>
-            )}
-          </div>
-        )}
-
-        {showVoiceSession && (
-          <div className="flex flex-1 flex-col">
-            <VoiceSession
-              userTranscript={userTranscript}
-              assistantTranscript={assistantTranscript}
-              micLevel={micLevel}
-              isAssistantSpeaking={isAssistantSpeaking}
-            />
-            <div className="flex justify-center pb-8">
-              <HelpButton onToggle={toggle} isActive />
-            </div>
-            {error && (
-              <p className="px-6 pb-4 text-center text-sm text-amber-700">
+              <p className="mt-6 min-h-[1.25rem] text-center text-sm text-amber-700">
                 {error}
               </p>
             )}
           </div>
-        )}
-
-        {showEscalation && (
+        ) : (
           <EscalationStatus
             currentStep={escalationStep}
             twilioConfigured={twilioConfigured}
