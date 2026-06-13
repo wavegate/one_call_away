@@ -84,24 +84,21 @@ export default function Home() {
   };
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col bg-gradient-to-b from-slate-50 via-teal-50/30 to-slate-100">
-      <header className="px-6 pt-12 pb-6 text-center">
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-800">
-          My Circle
-        </h1>
-        {hasEscalated && (
+    <main className="relative mx-auto flex min-h-dvh w-full max-w-md flex-col bg-gradient-to-b from-slate-50 via-teal-50/30 to-slate-100">
+      {hasEscalated && (
+        <div className="flex justify-end px-6 pt-6">
           <button
             onClick={handleReset}
-            className="mt-3 text-xs text-slate-400 underline"
+            className="text-xs text-slate-400 underline"
           >
             Start over
           </button>
-        )}
-      </header>
+        </div>
+      )}
 
-      <div className="flex flex-1 flex-col">
-        {!hasEscalated ? (
-          <div className="flex flex-1 flex-col items-center justify-center px-6">
+      {!hasEscalated ? (
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center px-6">
+          <div className="pointer-events-auto">
             <HelpButton
               onToggle={toggle}
               isActive={isListening}
@@ -110,21 +107,25 @@ export default function Home() {
               isAssistantSpeaking={isAssistantSpeaking}
               disabled={status === "connecting"}
             />
-            {error && (
-              <p className="mt-6 min-h-[1.25rem] text-center text-sm text-amber-700">
-                {error}
-              </p>
-            )}
           </div>
-        ) : (
+          {error && (
+            <p className="pointer-events-auto mt-6 min-h-[1.25rem] text-center text-sm text-amber-700">
+              {error}
+            </p>
+          )}
+        </div>
+      ) : (
+        <div className="relative z-10 flex flex-1 flex-col">
           <EscalationStatus
             currentStep={escalationStep}
             twilioConfigured={twilioConfigured}
           />
-        )}
-      </div>
+        </div>
+      )}
 
-      <MyCircleFooter />
+      <div className="relative z-10 mt-auto shrink-0">
+        <MyCircleFooter />
+      </div>
     </main>
   );
 }

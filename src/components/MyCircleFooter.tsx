@@ -16,23 +16,28 @@ export function MyCircleFooter() {
 
   return (
     <>
-      <footer className="px-6 py-5">
+      <footer className="px-6 py-6 pb-8">
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="flex w-full items-center justify-between rounded-2xl border border-teal-100 bg-white/80 px-5 py-4 shadow-sm transition-colors hover:border-teal-200 hover:bg-white"
+          className="flex w-full items-center justify-between rounded-3xl border border-teal-100 bg-white/80 px-6 py-6 shadow-md transition-colors hover:border-teal-200 hover:bg-white"
         >
           <div className="text-left">
-            <p className="text-sm font-semibold text-teal-800">My Circle</p>
+            <p className="text-xl font-semibold text-teal-800">My Circle</p>
+            <p className="mt-1 text-sm text-teal-600/80">
+              {count > 0
+                ? `${count} ${count === 1 ? "person" : "people"} in your circle`
+                : "Add people who can support you"}
+            </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             {count > 0 && (
-              <span className="rounded-full bg-teal-100 px-2.5 py-0.5 text-xs font-medium text-teal-700">
+              <span className="rounded-full bg-teal-100 px-3 py-1 text-sm font-medium text-teal-700">
                 {count}
               </span>
             )}
             <svg
-              className="h-5 w-5 text-teal-600"
+              className="h-7 w-7 text-teal-600"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"

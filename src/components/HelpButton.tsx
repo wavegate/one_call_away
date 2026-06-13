@@ -21,9 +21,9 @@ export function HelpButton({
       disabled={disabled}
       onClick={onToggle}
       className={`
-        group relative h-56 w-56 shrink-0 rounded-full
+        group relative h-48 w-48 shrink-0 rounded-full
         bg-gradient-to-br from-teal-400 via-teal-500 to-teal-700
-        shadow-[0_16px_48px_rgba(13,148,136,0.28)]
+        shadow-[0_12px_40px_rgba(13,148,136,0.28)]
         transition-all duration-300
         focus:outline-none focus-visible:ring-4 focus-visible:ring-teal-300/40
         disabled:opacity-50
@@ -32,7 +32,7 @@ export function HelpButton({
       aria-label={isActive ? "Stop voice session" : "Start voice session"}
     >
       {/* Subtle inner ring — one circle, not a thick band */}
-      <span className="pointer-events-none absolute inset-[18px] rounded-full border border-white/25" />
+      <span className="pointer-events-none absolute inset-[15px] rounded-full border border-white/25" />
 
       {/* Soft highlight */}
       <span className="pointer-events-none absolute inset-0 rounded-full bg-[radial-gradient(circle_at_35%_30%,rgba(255,255,255,0.22),transparent_55%)]" />
@@ -50,7 +50,7 @@ export function HelpButton({
 
       <span className="absolute inset-0 flex items-center justify-center">
         {isConnecting ? (
-          <span className="h-7 w-7 animate-spin rounded-full border-2 border-white/25 border-t-white" />
+          <span className="h-6 w-6 animate-spin rounded-full border-2 border-white/25 border-t-white" />
         ) : isActive ? (
           <span className="flex h-9 items-end justify-center gap-1.5">
             {[0, 1, 2, 3, 4].map((i) => {
