@@ -39,7 +39,7 @@ async function handleConfirm(request: NextRequest) {
     if (session.confirmed) {
       twiml.say(
         { voice: "Polly.Joanna" },
-        "Someone from the Circle is already connecting. Thank you."
+        "Someone else is already connecting with them. Thank you."
       );
       twiml.hangup();
       return xmlResponse(twiml);

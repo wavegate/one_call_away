@@ -41,7 +41,8 @@ export async function POST(request: NextRequest) {
     const transcript = (member_summary ?? "").trim() || "They asked for support.";
 
     const messageForSupporter =
-      supporter_message ?? `${member_name} asked for support.`;
+      supporter_message?.trim() ||
+      "They need someone to talk to as soon as possible.";
 
     const circleMembers = await getCallableCircleMembers();
     const phones = await getCirclePhoneNumbers();

@@ -4,15 +4,21 @@ import { buildConfirmUrl } from "@/lib/twilio";
 
 const VoiceResponse = twilio.twiml.VoiceResponse;
 
+function buildSupporterIntro(memberName: string, supporterMessage: string): string {
+  const concern = supporterMessage.trim();
+  if (concern) {
+    return `Hi. ${memberName} has reached out for support. ${concern}`;
+  }
+  return `Hi. ${memberName} has reached out for support and needs someone to talk to right now.`;
+}
+
 function buildTwiml(params: {
-  transcript: string;
   memberName: string;
   supporterMessage: string;
   sessionId: string;
   memberPhone: string;
 }) {
   const {
-    transcript,
     memberName,
     supporterMessage,
     sessionId,
@@ -22,11 +28,9 @@ function buildTwiml(params: {
 
   twiml.say(
     { voice: "Polly.Joanna" },
-    `This is My Circle. ${supporterMessage}`
+    buildSupporterIntro(memberName, supporterMessage)
   );
 
-  twiml.pause({ length: 1 });
-  twiml.say({ voice: "Polly.Joanna" }, transcript);
   twiml.pause({ length: 1 });
 
   if (memberPhone.trim()) {
@@ -58,13 +62,10 @@ function buildTwiml(params: {
 function getParams(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   return {
-    transcript:
-      searchParams.get("transcript") ??
-      "They are feeling urges and are concerned about using.",
     memberName: searchParams.get("memberName") ?? "Frank",
     supporterMessage:
       searchParams.get("supporterMessage") ??
-      "Frank asked for support.",
+      "They need someone to talk to as soon as possible.",
     sessionId: searchParams.get("sessionId") ?? "",
     memberPhone: searchParams.get("memberPhone") ?? "",
   };
