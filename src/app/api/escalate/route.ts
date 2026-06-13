@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
       body.supporterMessage ??
       `${DEMO_MEMBER_NAME} asked for support.`;
 
-    if (!isTwilioConfigured()) {
+    if (!(await isTwilioConfigured())) {
       return NextResponse.json({
         success: true,
         demo: true,
@@ -33,9 +33,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const phones = getCirclePhoneNumbers();
-    const circleMembers = getCallableCircleMembers();
-    const session = createEscalationSession({
+    const phones = await getCirclePhoneNumbers();
+    const circleMembers = await getCallableCircleMembers();
+    const session = await createEscalationSession({
       memberName: DEMO_MEMBER_NAME,
       memberPhone: MEMBER_PHONE,
       callMode: "sequential",
@@ -43,9 +43,11 @@ export async function POST(request: NextRequest) {
       transcript,
       supporterMessage,
     });
-    initSupporterAttempts(session.id, circleMembers);
+    await initSupporterAttempts(session.id, circleMembers);
 
-    const callSids = await startCircleCalls(getEscalationSession(session.id) ?? session);
+    const callSids = await startCircleCalls(
+      (await getEscalationSession(session.id)) ?? session
+    );
 
     return NextResponse.json({
       success: true,

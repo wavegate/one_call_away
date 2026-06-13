@@ -13,7 +13,9 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    const existingIds = new Set(getAllCircleMembers().map((member) => member.id));
+    const existingIds = new Set(
+      (await getAllCircleMembers()).map((member) => member.id)
+    );
     if (
       orderedIds.length !== existingIds.size ||
       orderedIds.some((id: string) => !existingIds.has(id))
@@ -24,7 +26,7 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    const members = reorderCircleMembers(orderedIds);
+    const members = await reorderCircleMembers(orderedIds);
     return NextResponse.json({ members });
   } catch {
     return NextResponse.json(

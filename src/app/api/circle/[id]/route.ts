@@ -17,7 +17,7 @@ export async function PUT(
       );
     }
 
-    const member = updateCircleMember(id, body);
+    const member = await updateCircleMember(id, body);
     if (!member) {
       return NextResponse.json({ error: "Member not found" }, { status: 404 });
     }
@@ -37,7 +37,7 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    const deleted = deleteCircleMember(id);
+    const deleted = await deleteCircleMember(id);
 
     if (!deleted) {
       return NextResponse.json({ error: "Member not found" }, { status: 404 });

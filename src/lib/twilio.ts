@@ -13,19 +13,20 @@ export function getTwilioClient() {
   return twilio(accountSid, authToken);
 }
 
-export function getCirclePhoneNumbers(): string[] {
-  const fromCircle = getCallableCircleMembers().map((m) => m.phone.trim());
+export async function getCirclePhoneNumbers(): Promise<string[]> {
+  const fromCircle = (await getCallableCircleMembers()).map((m) => m.phone.trim());
   if (fromCircle.length > 0) return fromCircle;
   if (SUPPORTER_PHONE) return [SUPPORTER_PHONE];
   return [];
 }
 
-export function isTwilioConfigured(): boolean {
+export async function isTwilioConfigured(): Promise<boolean> {
+  const phones = await getCirclePhoneNumbers();
   return Boolean(
     process.env.TWILIO_ACCOUNT_SID &&
       process.env.TWILIO_AUTH_TOKEN &&
       TWILIO_FROM_NUMBER &&
-      getCirclePhoneNumbers().length > 0
+      phones.length > 0
   );
 }
 

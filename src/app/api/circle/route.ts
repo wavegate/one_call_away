@@ -6,8 +6,16 @@ import {
 import type { CircleMemberInput } from "@/lib/types";
 
 export async function GET() {
-  const members = getAllCircleMembers();
-  return NextResponse.json({ members });
+  try {
+    const members = await getAllCircleMembers();
+    return NextResponse.json({ members });
+  } catch (error) {
+    console.error("[api/circle GET]", error);
+    return NextResponse.json(
+      { error: "Failed to load circle members" },
+      { status: 500 }
+    );
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -21,7 +29,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const member = addCircleMember(body);
+    const member = await addCircleMember(body);
     return NextResponse.json({ member }, { status: 201 });
   } catch {
     return NextResponse.json(

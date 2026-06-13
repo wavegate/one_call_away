@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
   );
 
   if (sessionId) {
-    setDialOutcome(sessionId, dialCallStatus, dialCallDuration);
+    await setDialOutcome(sessionId, dialCallStatus, dialCallDuration);
   }
 
   const twiml = new VoiceResponse();

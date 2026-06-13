@@ -18,14 +18,14 @@ export async function POST(request: NextRequest) {
   switch (callStatus) {
     case "initiated":
     case "queued":
-      updateEscalationStep(sessionId, "waiting");
+      await updateEscalationStep(sessionId, "waiting");
       break;
     case "ringing":
-      updateEscalationStep(sessionId, "waiting");
+      await updateEscalationStep(sessionId, "waiting");
       break;
     case "in-progress":
     case "answered":
-      markMemberConnected(sessionId);
+      await markMemberConnected(sessionId);
       break;
   }
 

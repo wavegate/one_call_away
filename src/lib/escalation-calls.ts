@@ -36,9 +36,9 @@ export async function placeSupporterCall(params: {
     statusCallbackMethod: "POST",
   });
 
-  registerCallSid(params.session.id, call.sid);
-  setActiveCallSid(params.session.id, call.sid);
-  markSupporterCalling(params.session.id, params.to, call.sid);
+  await registerCallSid(params.session.id, call.sid);
+  await setActiveCallSid(params.session.id, call.sid);
+  await markSupporterCalling(params.session.id, params.to, call.sid);
   return call.sid;
 }
 
@@ -67,7 +67,7 @@ export async function cancelOtherSupporterCalls(
   const client = getTwilioClient();
   if (!client) return;
 
-  const session = getEscalationSession(sessionId);
+  const session = await getEscalationSession(sessionId);
   if (!session) return;
 
   for (const callSid of session.callSids) {
@@ -79,7 +79,7 @@ export async function cancelOtherSupporterCalls(
     }
   }
 
-  markOtherSupportersUnavailable(sessionId, exceptCallSid);
+  await markOtherSupportersUnavailable(sessionId, exceptCallSid);
 }
 
 export async function tryCallNextSupporter(
@@ -87,10 +87,10 @@ export async function tryCallNextSupporter(
 ): Promise<string | null> {
   if (session.confirmed || session.callMode !== "sequential") return null;
 
-  const nextPhone = advanceToNextSupporter(session.id);
+  const nextPhone = await advanceToNextSupporter(session.id);
   if (!nextPhone) return null;
 
-  const refreshed = getEscalationSession(session.id);
+  const refreshed = await getEscalationSession(session.id);
   if (!refreshed) return null;
 
   return placeSupporterCall({ session: refreshed, to: nextPhone });

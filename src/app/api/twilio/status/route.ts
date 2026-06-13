@@ -15,11 +15,11 @@ export async function POST(request: NextRequest) {
   const callSid = formData.get("CallSid")?.toString();
 
   if (callSid && sessionId) {
-    registerCallSid(sessionId, callSid);
+    await registerCallSid(sessionId, callSid);
   }
 
   if (callSid) {
-    const session = updateCallStatus(callSid, callStatus, sessionId);
+    const session = await updateCallStatus(callSid, callStatus, sessionId);
     if (
       session &&
       shouldAdvanceSequentialCall(session, callSid, callStatus)

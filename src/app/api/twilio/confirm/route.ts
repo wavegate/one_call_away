@@ -33,7 +33,7 @@ async function handleConfirm(request: NextRequest) {
   const callSid = formData.get("CallSid")?.toString() ?? "";
 
   const twiml = new VoiceResponse();
-  const session = sessionId ? getEscalationSession(sessionId) : null;
+  const session = sessionId ? await getEscalationSession(sessionId) : null;
 
   if (digits === "1" && session && memberPhone.trim()) {
     if (session.confirmed) {
@@ -45,7 +45,7 @@ async function handleConfirm(request: NextRequest) {
       return xmlResponse(twiml);
     }
 
-    const confirmed = markSupporterConfirmed(sessionId, callSid);
+    const confirmed = await markSupporterConfirmed(sessionId, callSid);
     if (confirmed) {
       if (session.callMode === "parallel") {
         await cancelOtherSupporterCalls(sessionId, callSid);

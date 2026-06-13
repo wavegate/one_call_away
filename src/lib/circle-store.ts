@@ -1,80 +1,15 @@
-import Database from "better-sqlite3";
 import { randomUUID } from "crypto";
-import fs from "fs";
-import path from "path";
+import { ensureDbReady } from "./db";
 import type { CircleMember, CircleMemberInput } from "./types";
 
-const DATA_DIR = path.join(process.cwd(), "data");
-const DB_PATH = path.join(DATA_DIR, "circle.db");
-
-let db: Database.Database | null = null;
-
-function getDb(): Database.Database {
-  if (!db) {
-    if (!fs.existsSync(DATA_DIR)) {
-      fs.mkdirSync(DATA_DIR, { recursive: true });
-    }
-
-    db = new Database(DB_PATH);
-    db.pragma("journal_mode = WAL");
-
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS circle_members (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        relationship TEXT NOT NULL,
-        phone TEXT NOT NULL,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        sort_order INTEGER NOT NULL DEFAULT 0
-      )
-    `);
-
-    const columns = db
-      .prepare("PRAGMA table_info(circle_members)")
-      .all() as Array<{ name: string }>;
-    if (!columns.some((column) => column.name === "sort_order")) {
-      db.exec(
-        "ALTER TABLE circle_members ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0"
-      );
-      const rows = db
-        .prepare(
-          "SELECT id FROM circle_members ORDER BY created_at ASC"
-        )
-        .all() as Array<{ id: string }>;
-      const update = db.prepare(
-        "UPDATE circle_members SET sort_order = ? WHERE id = ?"
-      );
-      rows.forEach((row, index) => {
-        update.run(index, row.id);
-      });
-    }
-
-    const count = db
-      .prepare("SELECT COUNT(*) as count FROM circle_members")
-      .get() as { count: number };
-
-    if (count.count === 0) {
-      const seed = db.prepare(
-        "INSERT INTO circle_members (id, name, relationship, phone) VALUES (?, ?, ?, ?)"
-      );
-      seed.run(
-        randomUUID(),
-        "Jamie",
-        "Sponsor",
-        process.env.SUPPORTER_PHONE ?? ""
-      );
-    }
-  }
-
-  return db;
-}
-
-function rowToMember(row: {
+type CircleRow = {
   id: string;
   name: string;
   relationship: string;
   phone: string;
-}): CircleMember {
+};
+
+function rowToMember(row: CircleRow): CircleMember {
   return {
     id: row.id,
     name: row.name,
@@ -83,90 +18,106 @@ function rowToMember(row: {
   };
 }
 
-export function getAllCircleMembers(): CircleMember[] {
-  const rows = getDb()
-    .prepare(
-      "SELECT id, name, relationship, phone FROM circle_members ORDER BY sort_order ASC, created_at ASC"
-    )
-    .all() as Array<{
-    id: string;
-    name: string;
-    relationship: string;
-    phone: string;
-  }>;
-
-  return rows.map(rowToMember);
+function parseCircleRow(row: Record<string, unknown>): CircleRow {
+  return {
+    id: String(row.id),
+    name: String(row.name),
+    relationship: String(row.relationship),
+    phone: String(row.phone),
+  };
 }
 
-export function getCallableCircleMembers(): CircleMember[] {
-  return getAllCircleMembers().filter((m) => m.phone.trim().length > 0);
+export async function getAllCircleMembers(): Promise<CircleMember[]> {
+  const db = await ensureDbReady();
+  const result = await db.execute(
+    "SELECT id, name, relationship, phone FROM circle_members ORDER BY sort_order ASC, created_at ASC"
+  );
+
+  return result.rows.map((row) => rowToMember(parseCircleRow(row)));
 }
 
-export function addCircleMember(input: CircleMemberInput): CircleMember {
+export async function getCallableCircleMembers(): Promise<CircleMember[]> {
+  const members = await getAllCircleMembers();
+  return members.filter((member) => member.phone.trim().length > 0);
+}
+
+export async function addCircleMember(
+  input: CircleMemberInput
+): Promise<CircleMember> {
+  const db = await ensureDbReady();
   const id = randomUUID();
-  const maxOrder = getDb()
-    .prepare("SELECT COALESCE(MAX(sort_order), -1) as max_order FROM circle_members")
-    .get() as { max_order: number };
+  const maxOrderResult = await db.execute(
+    "SELECT COALESCE(MAX(sort_order), -1) as max_order FROM circle_members"
+  );
+  const maxOrder = Number(maxOrderResult.rows[0]?.max_order ?? -1);
 
-  getDb()
-    .prepare(
-      "INSERT INTO circle_members (id, name, relationship, phone, sort_order) VALUES (?, ?, ?, ?, ?)"
-    )
-    .run(
+  await db.execute({
+    sql: "INSERT INTO circle_members (id, name, relationship, phone, sort_order) VALUES (?, ?, ?, ?, ?)",
+    args: [
       id,
       input.name.trim(),
       input.relationship.trim(),
       input.phone.trim(),
-      maxOrder.max_order + 1
-    );
+      maxOrder + 1,
+    ],
+  });
 
   return { id, ...input };
 }
 
-export function updateCircleMember(
+export async function updateCircleMember(
   id: string,
   input: CircleMemberInput
-): CircleMember | null {
-  const result = getDb()
-    .prepare(
-      "UPDATE circle_members SET name = ?, relationship = ?, phone = ? WHERE id = ?"
-    )
-    .run(
+): Promise<CircleMember | null> {
+  const db = await ensureDbReady();
+  const result = await db.execute({
+    sql: "UPDATE circle_members SET name = ?, relationship = ?, phone = ? WHERE id = ?",
+    args: [
       input.name.trim(),
       input.relationship.trim(),
       input.phone.trim(),
-      id
-    );
+      id,
+    ],
+  });
 
-  if (result.changes === 0) return null;
+  if (result.rowsAffected === 0) return null;
   return { id, ...input };
 }
 
-export function deleteCircleMember(id: string): boolean {
-  const result = getDb()
-    .prepare("DELETE FROM circle_members WHERE id = ?")
-    .run(id);
-  if (result.changes === 0) return false;
+export async function deleteCircleMember(id: string): Promise<boolean> {
+  const db = await ensureDbReady();
+  const result = await db.execute({
+    sql: "DELETE FROM circle_members WHERE id = ?",
+    args: [id],
+  });
 
-  const remaining = getDb()
-    .prepare("SELECT id FROM circle_members ORDER BY sort_order ASC, created_at ASC")
-    .all() as Array<{ id: string }>;
-  reorderCircleMembers(remaining.map((row) => row.id));
+  if (result.rowsAffected === 0) return false;
+
+  const remaining = await db.execute(
+    "SELECT id FROM circle_members ORDER BY sort_order ASC, created_at ASC"
+  );
+  await reorderCircleMembers(remaining.rows.map((row) => String(row.id)));
   return true;
 }
 
-export function reorderCircleMembers(orderedIds: string[]): CircleMember[] {
-  const database = getDb();
-  const update = database.prepare(
-    "UPDATE circle_members SET sort_order = ? WHERE id = ?"
-  );
+export async function reorderCircleMembers(
+  orderedIds: string[]
+): Promise<CircleMember[]> {
+  const db = await ensureDbReady();
+  const tx = await db.transaction("write");
 
-  const reorder = database.transaction((ids: string[]) => {
-    ids.forEach((id, index) => {
-      update.run(index, id);
-    });
-  });
+  try {
+    for (const [index, id] of orderedIds.entries()) {
+      await tx.execute({
+        sql: "UPDATE circle_members SET sort_order = ? WHERE id = ?",
+        args: [index, id],
+      });
+    }
+    await tx.commit();
+  } catch (error) {
+    await tx.rollback();
+    throw error;
+  }
 
-  reorder(orderedIds);
   return getAllCircleMembers();
 }

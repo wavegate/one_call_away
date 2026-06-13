@@ -22,11 +22,11 @@ export async function POST(request: NextRequest) {
   return buildConnectResponse(request);
 }
 
-function buildConnectResponse(request: NextRequest) {
+async function buildConnectResponse(request: NextRequest) {
   const { sessionId, memberPhone, memberName } = getParams(request);
 
   if (sessionId) {
-    updateEscalationStep(sessionId, "waiting");
+    await updateEscalationStep(sessionId, "waiting");
   }
 
   const twiml = new VoiceResponse();

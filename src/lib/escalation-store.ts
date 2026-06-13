@@ -1,8 +1,12 @@
-import Database from "better-sqlite3";
 import { randomUUID } from "crypto";
-import fs from "fs";
-import path from "path";
-import type { CallMode, CircleMember, EscalationStep, SupporterAttempt, SupporterStatus } from "./types";
+import { ensureDbReady } from "./db";
+import type {
+  CallMode,
+  CircleMember,
+  EscalationStep,
+  SupporterAttempt,
+  SupporterStatus,
+} from "./types";
 
 export interface EscalationSession {
   id: string;
@@ -24,9 +28,6 @@ export interface EscalationSession {
   supporterAttempts: SupporterAttempt[];
 }
 
-const DATA_DIR = path.join(process.cwd(), "data");
-const DB_PATH = path.join(DATA_DIR, "escalations.db");
-
 const STEP_ORDER: EscalationStep[] = [
   "contacting",
   "calling",
@@ -34,99 +35,6 @@ const STEP_ORDER: EscalationStep[] = [
   "waiting",
   "connected",
 ];
-
-let db: Database.Database | null = null;
-
-function migrateDb(database: Database.Database): void {
-  const columns = database
-    .prepare("PRAGMA table_info(escalation_sessions)")
-    .all() as Array<{ name: string }>;
-  const names = new Set(columns.map((column) => column.name));
-
-  const additions: Array<{ name: string; sql: string }> = [
-    {
-      name: "call_mode",
-      sql: "ALTER TABLE escalation_sessions ADD COLUMN call_mode TEXT NOT NULL DEFAULT 'sequential'",
-    },
-    {
-      name: "member_phones",
-      sql: "ALTER TABLE escalation_sessions ADD COLUMN member_phones TEXT NOT NULL DEFAULT '[]'",
-    },
-    {
-      name: "current_index",
-      sql: "ALTER TABLE escalation_sessions ADD COLUMN current_index INTEGER NOT NULL DEFAULT 0",
-    },
-    {
-      name: "confirmed",
-      sql: "ALTER TABLE escalation_sessions ADD COLUMN confirmed INTEGER NOT NULL DEFAULT 0",
-    },
-    {
-      name: "confirmed_call_sid",
-      sql: "ALTER TABLE escalation_sessions ADD COLUMN confirmed_call_sid TEXT",
-    },
-    {
-      name: "active_call_sid",
-      sql: "ALTER TABLE escalation_sessions ADD COLUMN active_call_sid TEXT",
-    },
-    {
-      name: "transcript",
-      sql: "ALTER TABLE escalation_sessions ADD COLUMN transcript TEXT NOT NULL DEFAULT ''",
-    },
-    {
-      name: "supporter_message",
-      sql: "ALTER TABLE escalation_sessions ADD COLUMN supporter_message TEXT NOT NULL DEFAULT ''",
-    },
-    {
-      name: "supporter_attempts",
-      sql: "ALTER TABLE escalation_sessions ADD COLUMN supporter_attempts TEXT NOT NULL DEFAULT '[]'",
-    },
-  ];
-
-  for (const addition of additions) {
-    if (!names.has(addition.name)) {
-      database.exec(addition.sql);
-    }
-  }
-}
-
-function getDb(): Database.Database {
-  if (!db) {
-    if (!fs.existsSync(DATA_DIR)) {
-      fs.mkdirSync(DATA_DIR, { recursive: true });
-    }
-
-    db = new Database(DB_PATH);
-    db.pragma("journal_mode = WAL");
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS escalation_sessions (
-        id TEXT PRIMARY KEY,
-        created_at INTEGER NOT NULL,
-        step TEXT NOT NULL,
-        demo INTEGER NOT NULL DEFAULT 0,
-        member_name TEXT NOT NULL,
-        member_phone TEXT NOT NULL,
-        call_sids TEXT NOT NULL DEFAULT '[]',
-        dial_outcome TEXT,
-        call_mode TEXT NOT NULL DEFAULT 'sequential',
-        member_phones TEXT NOT NULL DEFAULT '[]',
-        current_index INTEGER NOT NULL DEFAULT 0,
-        confirmed INTEGER NOT NULL DEFAULT 0,
-        confirmed_call_sid TEXT,
-        active_call_sid TEXT,
-        transcript TEXT NOT NULL DEFAULT '',
-        supporter_message TEXT NOT NULL DEFAULT '',
-        supporter_attempts TEXT NOT NULL DEFAULT '[]'
-      )
-    `);
-    migrateDb(db);
-  }
-
-  return db;
-}
-
-function maxStep(a: EscalationStep, b: EscalationStep): EscalationStep {
-  return STEP_ORDER.indexOf(a) >= STEP_ORDER.indexOf(b) ? a : b;
-}
 
 type SessionRow = {
   id: string;
@@ -150,6 +58,34 @@ type SessionRow = {
 
 const SESSION_SELECT = `SELECT id, created_at, step, demo, member_name, member_phone, call_sids, dial_outcome,
   call_mode, member_phones, current_index, confirmed, confirmed_call_sid, active_call_sid, transcript, supporter_message, supporter_attempts`;
+
+function parseSessionRow(row: Record<string, unknown>): SessionRow {
+  return {
+    id: String(row.id),
+    created_at: Number(row.created_at),
+    step: String(row.step) as EscalationStep,
+    demo: Number(row.demo),
+    member_name: String(row.member_name),
+    member_phone: String(row.member_phone),
+    call_sids: String(row.call_sids),
+    dial_outcome: row.dial_outcome == null ? null : String(row.dial_outcome),
+    call_mode: String(row.call_mode) as CallMode,
+    member_phones: String(row.member_phones),
+    current_index: Number(row.current_index),
+    confirmed: Number(row.confirmed),
+    confirmed_call_sid:
+      row.confirmed_call_sid == null ? null : String(row.confirmed_call_sid),
+    active_call_sid:
+      row.active_call_sid == null ? null : String(row.active_call_sid),
+    transcript: String(row.transcript),
+    supporter_message: String(row.supporter_message),
+    supporter_attempts: String(row.supporter_attempts),
+  };
+}
+
+function maxStep(a: EscalationStep, b: EscalationStep): EscalationStep {
+  return STEP_ORDER.indexOf(a) >= STEP_ORDER.indexOf(b) ? a : b;
+}
 
 function rowToSession(row: SessionRow): EscalationSession {
   return {
@@ -211,10 +147,10 @@ function updateAttemptStatus(
   });
 }
 
-function persistSession(session: EscalationSession): void {
-  getDb()
-    .prepare(
-      `INSERT INTO escalation_sessions
+async function persistSession(session: EscalationSession): Promise<void> {
+  const db = await ensureDbReady();
+  await db.execute({
+    sql: `INSERT INTO escalation_sessions
         (id, created_at, step, demo, member_name, member_phone, call_sids, dial_outcome,
          call_mode, member_phones, current_index, confirmed, confirmed_call_sid, active_call_sid,
          transcript, supporter_message, supporter_attempts)
@@ -231,9 +167,8 @@ function persistSession(session: EscalationSession): void {
         active_call_sid = excluded.active_call_sid,
         transcript = excluded.transcript,
         supporter_message = excluded.supporter_message,
-        supporter_attempts = excluded.supporter_attempts`
-    )
-    .run(
+        supporter_attempts = excluded.supporter_attempts`,
+    args: [
       session.id,
       session.createdAt,
       session.step,
@@ -250,11 +185,12 @@ function persistSession(session: EscalationSession): void {
       session.activeCallSid ?? null,
       session.transcript,
       session.supporterMessage,
-      JSON.stringify(session.supporterAttempts)
-    );
+      JSON.stringify(session.supporterAttempts),
+    ],
+  });
 }
 
-export function createEscalationSession(params: {
+export async function createEscalationSession(params: {
   demo?: boolean;
   memberName: string;
   memberPhone: string;
@@ -264,7 +200,7 @@ export function createEscalationSession(params: {
   transcript?: string;
   supporterMessage?: string;
   supporterAttempts?: SupporterAttempt[];
-}): EscalationSession {
+}): Promise<EscalationSession> {
   const session: EscalationSession = {
     id: randomUUID(),
     createdAt: Date.now(),
@@ -281,15 +217,15 @@ export function createEscalationSession(params: {
     supporterMessage: params.supporterMessage ?? "",
     supporterAttempts: params.supporterAttempts ?? [],
   };
-  persistSession(session);
+  await persistSession(session);
   return session;
 }
 
-export function initSupporterAttempts(
+export async function initSupporterAttempts(
   sessionId: string,
   members: CircleMember[]
-): void {
-  const session = getEscalationSession(sessionId);
+): Promise<void> {
+  const session = await getEscalationSession(sessionId);
   if (!session) return;
 
   session.supporterAttempts = members.map((member) => ({
@@ -299,15 +235,15 @@ export function initSupporterAttempts(
     phone: member.phone.trim(),
     status: "pending",
   }));
-  persistSession(session);
+  await persistSession(session);
 }
 
-export function markSupporterCalling(
+export async function markSupporterCalling(
   sessionId: string,
   phone: string,
   callSid: string
-): void {
-  const session = getEscalationSession(sessionId);
+): Promise<void> {
+  const session = await getEscalationSession(sessionId);
   if (!session) return;
 
   const attempt = findAttemptByPhone(session.supporterAttempts, phone);
@@ -319,15 +255,15 @@ export function markSupporterCalling(
     "calling",
     callSid
   );
-  persistSession(session);
+  await persistSession(session);
 }
 
-export function updateSupporterCallStatus(
+export async function updateSupporterCallStatus(
   sessionId: string,
   callSid: string,
   callStatus: string
-): void {
-  const session = getEscalationSession(sessionId);
+): Promise<void> {
+  const session = await getEscalationSession(sessionId);
   if (!session) return;
 
   const attempt = findAttemptByCallSid(session.supporterAttempts, callSid);
@@ -371,15 +307,14 @@ export function updateSupporterCallStatus(
     nextStatus,
     callSid
   );
-  persistSession(session);
+  await persistSession(session);
 }
 
-
-export function markOtherSupportersUnavailable(
+export async function markOtherSupportersUnavailable(
   sessionId: string,
   exceptCallSid: string
-): void {
-  const session = getEscalationSession(sessionId);
+): Promise<void> {
+  const session = await getEscalationSession(sessionId);
   if (!session) return;
 
   session.supporterAttempts = session.supporterAttempts.map((attempt) => {
@@ -401,43 +336,57 @@ export function markOtherSupportersUnavailable(
 
     return attempt;
   });
-  persistSession(session);
+  await persistSession(session);
 }
 
-export function getEscalationSession(id: string): EscalationSession | null {
-  const row = getDb()
-    .prepare(`${SESSION_SELECT} FROM escalation_sessions WHERE id = ?`)
-    .get(id) as SessionRow | undefined;
+export async function getEscalationSession(
+  id: string
+): Promise<EscalationSession | null> {
+  const db = await ensureDbReady();
+  const result = await db.execute({
+    sql: `${SESSION_SELECT} FROM escalation_sessions WHERE id = ?`,
+    args: [id],
+  });
 
-  return row ? rowToSession(row) : null;
+  const row = result.rows[0];
+  return row ? rowToSession(parseSessionRow(row)) : null;
 }
 
-export function updateEscalationStep(id: string, step: EscalationStep): void {
-  const session = getEscalationSession(id);
+export async function updateEscalationStep(
+  id: string,
+  step: EscalationStep
+): Promise<void> {
+  const session = await getEscalationSession(id);
   if (!session) return;
   session.step = maxStep(session.step, step);
-  persistSession(session);
+  await persistSession(session);
 }
 
-export function registerCallSid(sessionId: string, callSid: string): void {
-  const session = getEscalationSession(sessionId);
-  if (!session || session.callSids.includes(callSid)) return;
-  session.callSids.push(callSid);
-  persistSession(session);
-}
-
-export function setActiveCallSid(sessionId: string, callSid: string): void {
-  const session = getEscalationSession(sessionId);
-  if (!session) return;
-  session.activeCallSid = callSid;
-  persistSession(session);
-}
-
-export function markSupporterConfirmed(
+export async function registerCallSid(
   sessionId: string,
   callSid: string
-): boolean {
-  const session = getEscalationSession(sessionId);
+): Promise<void> {
+  const session = await getEscalationSession(sessionId);
+  if (!session || session.callSids.includes(callSid)) return;
+  session.callSids.push(callSid);
+  await persistSession(session);
+}
+
+export async function setActiveCallSid(
+  sessionId: string,
+  callSid: string
+): Promise<void> {
+  const session = await getEscalationSession(sessionId);
+  if (!session) return;
+  session.activeCallSid = callSid;
+  await persistSession(session);
+}
+
+export async function markSupporterConfirmed(
+  sessionId: string,
+  callSid: string
+): Promise<boolean> {
+  const session = await getEscalationSession(sessionId);
   if (!session || session.confirmed) return false;
 
   const attempt = findAttemptByCallSid(session.supporterAttempts, callSid);
@@ -452,63 +401,69 @@ export function markSupporterConfirmed(
       callSid
     );
   }
-  persistSession(session);
+  await persistSession(session);
   return true;
 }
 
-export function advanceToNextSupporter(sessionId: string): string | null {
-  const session = getEscalationSession(sessionId);
+export async function advanceToNextSupporter(
+  sessionId: string
+): Promise<string | null> {
+  const session = await getEscalationSession(sessionId);
   if (!session || session.confirmed) return null;
 
   const nextIndex = session.currentIndex + 1;
   if (nextIndex >= session.memberPhones.length) return null;
 
   session.currentIndex = nextIndex;
-  persistSession(session);
+  await persistSession(session);
   return session.memberPhones[nextIndex] ?? null;
 }
 
-function findSessionByCallSid(callSid: string): EscalationSession | null {
-  const rows = getDb()
-    .prepare(`${SESSION_SELECT} FROM escalation_sessions ORDER BY created_at DESC`)
-    .all() as SessionRow[];
+async function findSessionByCallSid(
+  callSid: string
+): Promise<EscalationSession | null> {
+  const db = await ensureDbReady();
+  const result = await db.execute(
+    `${SESSION_SELECT} FROM escalation_sessions ORDER BY created_at DESC`
+  );
 
-  for (const row of rows) {
+  for (const rawRow of result.rows) {
+    const row = parseSessionRow(rawRow);
     const callSids = JSON.parse(row.call_sids) as string[];
     if (callSids.includes(callSid)) {
-      return rowToSession({ ...row, call_sids: row.call_sids });
+      return rowToSession(row);
     }
   }
 
   return null;
 }
 
-export function updateCallStatus(
+export async function updateCallStatus(
   callSid: string,
   callStatus: string,
   sessionId?: string | null
-): EscalationSession | null {
+): Promise<EscalationSession | null> {
   const session = sessionId
-    ? getEscalationSession(sessionId)
-    : findSessionByCallSid(callSid);
+    ? await getEscalationSession(sessionId)
+    : await findSessionByCallSid(callSid);
   if (!session) return null;
 
-  updateSupporterCallStatus(session.id, callSid, callStatus);
+  await updateSupporterCallStatus(session.id, callSid, callStatus);
 
   switch (callStatus) {
     case "initiated":
     case "queued":
-      updateEscalationStep(session.id, "contacting");
+      await updateEscalationStep(session.id, "contacting");
       break;
     case "ringing":
-      updateEscalationStep(session.id, "calling");
+      await updateEscalationStep(session.id, "calling");
       break;
     case "in-progress":
-      updateEscalationStep(session.id, "delivered");
+      await updateEscalationStep(session.id, "delivered");
       break;
     case "completed":
       if (session.dialOutcome === "answered") {
-        updateEscalationStep(session.id, "connected");
+        await updateEscalationStep(session.id, "connected");
       }
       break;
   }
@@ -529,20 +484,20 @@ export function shouldAdvanceSequentialCall(
   );
 }
 
-export function markMemberConnected(sessionId: string): void {
-  const session = getEscalationSession(sessionId);
+export async function markMemberConnected(sessionId: string): Promise<void> {
+  const session = await getEscalationSession(sessionId);
   if (!session) return;
   session.dialOutcome = "answered";
   session.step = "connected";
-  persistSession(session);
+  await persistSession(session);
 }
 
-export function setDialOutcome(
+export async function setDialOutcome(
   sessionId: string,
   dialCallStatus: string,
   dialCallDuration?: number
-): void {
-  const session = getEscalationSession(sessionId);
+): Promise<void> {
+  const session = await getEscalationSession(sessionId);
   if (!session) return;
 
   const duration = dialCallDuration ?? 0;
@@ -568,8 +523,8 @@ export function setDialOutcome(
   if (connected) {
     session.step = "connected";
     session.dialOutcome = "answered";
-    persistSession(session);
+    await persistSession(session);
   } else {
-    persistSession(session);
+    await persistSession(session);
   }
 }
