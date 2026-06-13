@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { DEMO_MEMBER_NAME } from "@/lib/config";
+import { getCallableCircleMembers } from "@/lib/circle-store";
+import { startCircleCalls } from "@/lib/escalation-calls";
+import { DEMO_MEMBER_NAME, MEMBER_PHONE } from "@/lib/config";
 import {
-  buildStatusUrl,
-  buildVoiceUrl,
-  getTwilioClient,
-  isTwilioConfigured,
-} from "@/lib/twilio";
+  createEscalationSession,
+  getEscalationSession,
+  initSupporterAttempts,
+} from "@/lib/escalation-store";
+import { getCirclePhoneNumbers, getTwilioClient, isTwilioConfigured } from "@/lib/twilio";
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,7 +15,7 @@ export async function POST(request: NextRequest) {
     const transcript = body.transcript ?? "";
     const supporterMessage =
       body.supporterMessage ??
-      `${DEMO_MEMBER_NAME} asked for support. ${DEMO_MEMBER_NAME} left this message.`;
+      `${DEMO_MEMBER_NAME} asked for support.`;
 
     if (!isTwilioConfigured()) {
       return NextResponse.json({
@@ -31,25 +33,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const from = process.env.TWILIO_FROM_NUMBER!;
-    const to = process.env.SUPPORTER_PHONE ?? process.env.TWILIO_TO_NUMBER!;
-
-    const call = await client.calls.create({
-      to,
-      from,
-      url: buildVoiceUrl({
-        transcript,
-        memberName: DEMO_MEMBER_NAME,
-        supporterMessage,
-      }),
-      statusCallback: buildStatusUrl(),
-      statusCallbackEvent: ["initiated", "ringing", "answered", "completed"],
-      statusCallbackMethod: "POST",
+    const phones = getCirclePhoneNumbers();
+    const circleMembers = getCallableCircleMembers();
+    const session = createEscalationSession({
+      memberName: DEMO_MEMBER_NAME,
+      memberPhone: MEMBER_PHONE,
+      callMode: "sequential",
+      memberPhones: phones,
+      transcript,
+      supporterMessage,
     });
+    initSupporterAttempts(session.id, circleMembers);
+
+    const callSids = await startCircleCalls(getEscalationSession(session.id) ?? session);
 
     return NextResponse.json({
       success: true,
-      callSid: call.sid,
+      callSids,
+      sessionId: session.id,
     });
   } catch (error) {
     const message =

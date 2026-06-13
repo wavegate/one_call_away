@@ -1,5 +1,7 @@
 export const DEMO_MEMBER_NAME = process.env.DEMO_MEMBER_NAME ?? "Frank";
 
+export const MEMBER_PHONE = process.env.MEMBER_PHONE ?? "";
+
 export const SUPPORTER_PHONE =
   process.env.SUPPORTER_PHONE ?? process.env.TWILIO_TO_NUMBER ?? "";
 

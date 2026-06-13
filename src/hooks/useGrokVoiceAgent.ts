@@ -8,6 +8,7 @@ import {
   createPlaybackManager,
 } from "@/lib/audio-utils";
 import { getSessionConfig } from "@/lib/grok-session";
+import type { CallMode, SupporterAttempt } from "@/lib/types";
 
 const WS_URL = "wss://api.x.ai/v1/realtime?model=grok-voice-latest";
 const CONNECT_TIMEOUT_MS = 10000;
@@ -24,17 +25,23 @@ export interface VoiceMessage {
 
 export interface NotifyCirclePayload {
   urgency: string;
+  call_mode: "sequential" | "parallel";
   member_summary: string;
   supporter_message: string;
   member_name?: string;
   recommended_action: string;
-  conversation_excerpt?: string;
-  share_original_words: boolean;
+}
+
+export interface EscalationMeta {
+  sessionId?: string;
+  demo?: boolean;
+  callMode?: CallMode;
+  supporterAttempts?: SupporterAttempt[];
 }
 
 interface UseGrokVoiceAgentOptions {
   memberName?: string;
-  onEscalation?: (payload: NotifyCirclePayload) => void;
+  onEscalation?: (payload: NotifyCirclePayload, meta: EscalationMeta) => void;
 }
 
 interface RealtimeEvent {
@@ -177,7 +184,12 @@ export function useGrokVoiceAgent(options: UseGrokVoiceAgentOptions = {}) {
         ws.send(JSON.stringify({ type: "response.create" }));
 
         if (result.success) {
-          onEscalationRef.current?.(args);
+          onEscalationRef.current?.(args, {
+            sessionId: result.sessionId,
+            demo: result.demo,
+            callMode: result.call_mode,
+            supporterAttempts: result.supporterAttempts,
+          });
         }
       } catch (err) {
         const message =

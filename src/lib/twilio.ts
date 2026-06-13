@@ -33,14 +33,56 @@ export function buildVoiceUrl(params: {
   transcript: string;
   memberName: string;
   supporterMessage: string;
+  sessionId: string;
+  memberPhone: string;
 }) {
   const url = new URL("/api/twilio/voice", APP_BASE_URL);
   url.searchParams.set("transcript", params.transcript);
   url.searchParams.set("memberName", params.memberName);
   url.searchParams.set("supporterMessage", params.supporterMessage);
+  url.searchParams.set("sessionId", params.sessionId);
+  url.searchParams.set("memberPhone", params.memberPhone);
   return url.toString();
 }
 
-export function buildStatusUrl() {
-  return new URL("/api/twilio/status", APP_BASE_URL).toString();
+export function buildConnectUrl(params: {
+  sessionId: string;
+  memberPhone: string;
+  memberName: string;
+}) {
+  const url = new URL("/api/twilio/connect", APP_BASE_URL);
+  url.searchParams.set("sessionId", params.sessionId);
+  url.searchParams.set("memberPhone", params.memberPhone);
+  url.searchParams.set("memberName", params.memberName);
+  return url.toString();
+}
+
+export function buildConfirmUrl(params: {
+  sessionId: string;
+  memberPhone: string;
+  memberName: string;
+}) {
+  const url = new URL("/api/twilio/confirm", APP_BASE_URL);
+  url.searchParams.set("sessionId", params.sessionId);
+  url.searchParams.set("memberPhone", params.memberPhone);
+  url.searchParams.set("memberName", params.memberName);
+  return url.toString();
+}
+
+export function buildDialStatusUrl(sessionId: string) {
+  const url = new URL("/api/twilio/dial-status", APP_BASE_URL);
+  url.searchParams.set("sessionId", sessionId);
+  return url.toString();
+}
+
+export function buildMemberDialStatusUrl(sessionId: string) {
+  const url = new URL("/api/twilio/member-status", APP_BASE_URL);
+  url.searchParams.set("sessionId", sessionId);
+  return url.toString();
+}
+
+export function buildStatusUrl(sessionId: string) {
+  const url = new URL("/api/twilio/status", APP_BASE_URL);
+  url.searchParams.set("sessionId", sessionId);
+  return url.toString();
 }

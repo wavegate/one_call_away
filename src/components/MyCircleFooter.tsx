@@ -26,7 +26,7 @@ export function MyCircleFooter() {
             <p className="text-xl font-semibold text-teal-800">My Circle</p>
             <p className="mt-1 text-sm text-teal-600/80">
               {count > 0
-                ? `${count} ${count === 1 ? "person" : "people"} in your circle`
+                ? `${count} ${count === 1 ? "person" : "people"} in My Circle`
                 : "Add people who can support you"}
             </p>
           </div>

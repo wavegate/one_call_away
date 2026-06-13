@@ -6,51 +6,136 @@ import { HelpButton } from "@/components/HelpButton";
 import { MyCircleFooter } from "@/components/MyCircleFooter";
 import {
   useGrokVoiceAgent,
+  type EscalationMeta,
   type NotifyCirclePayload,
 } from "@/hooks/useGrokVoiceAgent";
-import type { EscalationStep } from "@/lib/types";
+import type {
+  CallMode,
+  EscalationStep,
+  SupporterAttempt,
+  SupporterStatus,
+} from "@/lib/types";
+
+function updateAttempt(
+  attempts: SupporterAttempt[],
+  id: string,
+  status: SupporterStatus
+): SupporterAttempt[] {
+  return attempts.map((attempt) =>
+    attempt.id === id ? { ...attempt, status } : attempt
+  );
+}
 
 export default function Home() {
   const [escalationStep, setEscalationStep] =
     useState<EscalationStep>("contacting");
   const [hasEscalated, setHasEscalated] = useState(false);
+  const [escalationSessionId, setEscalationSessionId] = useState<string | null>(
+    null
+  );
+  const [isDemoEscalation, setIsDemoEscalation] = useState(false);
   const [twilioConfigured, setTwilioConfigured] = useState(false);
+  const [callMode, setCallMode] = useState<CallMode>("sequential");
+  const [supporterAttempts, setSupporterAttempts] = useState<SupporterAttempt[]>(
+    []
+  );
+  const [confirmedSupporter, setConfirmedSupporter] = useState<{
+    name: string;
+    relationship: string;
+  } | null>(null);
   const holdingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
     null
   );
 
-  const advanceEscalation = useCallback(() => {
-    const steps: EscalationStep[] = [
-      "contacting",
-      "calling",
-      "delivered",
-      "waiting",
-    ];
-    let index = 0;
-    setEscalationStep("contacting");
+  const advanceDemoEscalation = useCallback(
+    (attempts: SupporterAttempt[], mode: CallMode) => {
+      let tick = 0;
 
-    return setInterval(() => {
-      index += 1;
-      if (index < steps.length) {
-        setEscalationStep(steps[index]);
-      } else {
-        if (holdingIntervalRef.current) {
-          clearInterval(holdingIntervalRef.current);
-          holdingIntervalRef.current = null;
+      return setInterval(() => {
+        tick += 1;
+
+        if (mode === "parallel") {
+          if (tick === 1) {
+            setEscalationStep("calling");
+          } else if (tick === 2) {
+            setSupporterAttempts((current) =>
+              current.map((attempt, index) => ({
+                ...attempt,
+                status: index === 0 ? "confirmed" : "unavailable",
+              }))
+            );
+            setConfirmedSupporter({
+              name: attempts[0]?.name ?? "Jamie",
+              relationship: attempts[0]?.relationship ?? "Sponsor",
+            });
+            setEscalationStep("connected");
+          }
+          return;
         }
-      }
-    }, 2500);
-  }, []);
+
+        if (tick === 1) {
+          setEscalationStep("calling");
+        } else if (tick === 2 && attempts[0]) {
+          setSupporterAttempts((current) => {
+            let next = updateAttempt(current, attempts[0].id, "unavailable");
+            if (attempts[1]) {
+              next = updateAttempt(next, attempts[1].id, "ringing");
+            }
+            return next;
+          });
+        } else if (tick === 3 && attempts[1]) {
+          setSupporterAttempts((current) =>
+            updateAttempt(current, attempts[1].id, "listening")
+          );
+          setEscalationStep("delivered");
+        } else if (tick === 4 && attempts[1]) {
+          setSupporterAttempts((current) =>
+            updateAttempt(current, attempts[1].id, "confirmed")
+          );
+          setConfirmedSupporter({
+            name: attempts[1].name,
+            relationship: attempts[1].relationship,
+          });
+          setEscalationStep("connected");
+        }
+
+        if (tick >= 4) {
+          if (holdingIntervalRef.current) {
+            clearInterval(holdingIntervalRef.current);
+            holdingIntervalRef.current = null;
+          }
+        }
+      }, 2500);
+    },
+    []
+  );
 
   const handleEscalation = useCallback(
-    (_payload: NotifyCirclePayload) => {
+    (payload: NotifyCirclePayload, meta: EscalationMeta) => {
       setHasEscalated(true);
+      setEscalationStep("contacting");
+      setCallMode(meta.callMode ?? payload.call_mode ?? "sequential");
+      setSupporterAttempts(meta.supporterAttempts ?? []);
+      setConfirmedSupporter(null);
+
       if (holdingIntervalRef.current) {
         clearInterval(holdingIntervalRef.current);
+        holdingIntervalRef.current = null;
       }
-      holdingIntervalRef.current = advanceEscalation();
+
+      if (meta.demo) {
+        setIsDemoEscalation(true);
+        setEscalationSessionId(null);
+        holdingIntervalRef.current = advanceDemoEscalation(
+          meta.supporterAttempts ?? [],
+          meta.callMode ?? payload.call_mode ?? "sequential"
+        );
+      } else if (meta.sessionId) {
+        setIsDemoEscalation(false);
+        setEscalationSessionId(meta.sessionId);
+      }
     },
-    [advanceEscalation]
+    [advanceDemoEscalation]
   );
 
   const {
@@ -73,6 +158,36 @@ export default function Home() {
       .catch(() => setTwilioConfigured(false));
   }, []);
 
+  useEffect(() => {
+    if (!escalationSessionId || isDemoEscalation) return;
+
+    const poll = async () => {
+      try {
+        const res = await fetch(
+          `/api/escalation-status?id=${escalationSessionId}`
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.step) {
+          setEscalationStep(data.step);
+        }
+        if (data.callMode) {
+          setCallMode(data.callMode);
+        }
+        if (Array.isArray(data.supporterAttempts)) {
+          setSupporterAttempts(data.supporterAttempts);
+        }
+        setConfirmedSupporter(data.confirmedSupporter ?? null);
+      } catch {
+        // ignore polling errors
+      }
+    };
+
+    poll();
+    const interval = setInterval(poll, 1000);
+    return () => clearInterval(interval);
+  }, [escalationSessionId, isDemoEscalation]);
+
   const handleReset = () => {
     if (holdingIntervalRef.current) {
       clearInterval(holdingIntervalRef.current);
@@ -80,7 +195,12 @@ export default function Home() {
     }
     disconnect();
     setHasEscalated(false);
+    setEscalationSessionId(null);
+    setIsDemoEscalation(false);
     setEscalationStep("contacting");
+    setCallMode("sequential");
+    setSupporterAttempts([]);
+    setConfirmedSupporter(null);
   };
 
   return (
@@ -118,6 +238,9 @@ export default function Home() {
         <div className="relative z-10 flex flex-1 flex-col">
           <EscalationStatus
             currentStep={escalationStep}
+            callMode={callMode}
+            supporterAttempts={supporterAttempts}
+            confirmedSupporter={confirmedSupporter}
             twilioConfigured={twilioConfigured}
           />
         </div>

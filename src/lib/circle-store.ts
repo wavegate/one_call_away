@@ -24,9 +24,30 @@ function getDb(): Database.Database {
         name TEXT NOT NULL,
         relationship TEXT NOT NULL,
         phone TEXT NOT NULL,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        sort_order INTEGER NOT NULL DEFAULT 0
       )
     `);
+
+    const columns = db
+      .prepare("PRAGMA table_info(circle_members)")
+      .all() as Array<{ name: string }>;
+    if (!columns.some((column) => column.name === "sort_order")) {
+      db.exec(
+        "ALTER TABLE circle_members ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0"
+      );
+      const rows = db
+        .prepare(
+          "SELECT id FROM circle_members ORDER BY created_at ASC"
+        )
+        .all() as Array<{ id: string }>;
+      const update = db.prepare(
+        "UPDATE circle_members SET sort_order = ? WHERE id = ?"
+      );
+      rows.forEach((row, index) => {
+        update.run(index, row.id);
+      });
+    }
 
     const count = db
       .prepare("SELECT COUNT(*) as count FROM circle_members")
@@ -65,7 +86,7 @@ function rowToMember(row: {
 export function getAllCircleMembers(): CircleMember[] {
   const rows = getDb()
     .prepare(
-      "SELECT id, name, relationship, phone FROM circle_members ORDER BY created_at ASC"
+      "SELECT id, name, relationship, phone FROM circle_members ORDER BY sort_order ASC, created_at ASC"
     )
     .all() as Array<{
     id: string;
@@ -83,11 +104,21 @@ export function getCallableCircleMembers(): CircleMember[] {
 
 export function addCircleMember(input: CircleMemberInput): CircleMember {
   const id = randomUUID();
+  const maxOrder = getDb()
+    .prepare("SELECT COALESCE(MAX(sort_order), -1) as max_order FROM circle_members")
+    .get() as { max_order: number };
+
   getDb()
     .prepare(
-      "INSERT INTO circle_members (id, name, relationship, phone) VALUES (?, ?, ?, ?)"
+      "INSERT INTO circle_members (id, name, relationship, phone, sort_order) VALUES (?, ?, ?, ?, ?)"
     )
-    .run(id, input.name.trim(), input.relationship.trim(), input.phone.trim());
+    .run(
+      id,
+      input.name.trim(),
+      input.relationship.trim(),
+      input.phone.trim(),
+      maxOrder.max_order + 1
+    );
 
   return { id, ...input };
 }
@@ -115,5 +146,27 @@ export function deleteCircleMember(id: string): boolean {
   const result = getDb()
     .prepare("DELETE FROM circle_members WHERE id = ?")
     .run(id);
-  return result.changes > 0;
+  if (result.changes === 0) return false;
+
+  const remaining = getDb()
+    .prepare("SELECT id FROM circle_members ORDER BY sort_order ASC, created_at ASC")
+    .all() as Array<{ id: string }>;
+  reorderCircleMembers(remaining.map((row) => row.id));
+  return true;
+}
+
+export function reorderCircleMembers(orderedIds: string[]): CircleMember[] {
+  const database = getDb();
+  const update = database.prepare(
+    "UPDATE circle_members SET sort_order = ? WHERE id = ?"
+  );
+
+  const reorder = database.transaction((ids: string[]) => {
+    ids.forEach((id, index) => {
+      update.run(index, id);
+    });
+  });
+
+  reorder(orderedIds);
+  return getAllCircleMembers();
 }

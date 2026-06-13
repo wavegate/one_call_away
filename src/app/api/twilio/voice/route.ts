@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import twilio from "twilio";
+import { buildConfirmUrl } from "@/lib/twilio";
 
 const VoiceResponse = twilio.twiml.VoiceResponse;
 
@@ -7,8 +8,16 @@ function buildTwiml(params: {
   transcript: string;
   memberName: string;
   supporterMessage: string;
+  sessionId: string;
+  memberPhone: string;
 }) {
-  const { transcript, memberName, supporterMessage } = params;
+  const {
+    transcript,
+    memberName,
+    supporterMessage,
+    sessionId,
+    memberPhone,
+  } = params;
   const twiml = new VoiceResponse();
 
   twiml.say(
@@ -19,10 +28,29 @@ function buildTwiml(params: {
   twiml.pause({ length: 1 });
   twiml.say({ voice: "Polly.Joanna" }, transcript);
   twiml.pause({ length: 1 });
-  twiml.say(
-    { voice: "Polly.Joanna" },
-    `Please call ${memberName} back now if you are available.`
-  );
+
+  if (memberPhone.trim()) {
+    const gather = twiml.gather({
+      numDigits: 1,
+      timeout: 10,
+      action: buildConfirmUrl({ sessionId, memberPhone, memberName }),
+      method: "POST",
+    });
+    gather.say(
+      { voice: "Polly.Joanna" },
+      `Press 1 to connect with ${memberName} now, or hang up if you are not available.`
+    );
+    twiml.say(
+      { voice: "Polly.Joanna" },
+      "No response received. Goodbye."
+    );
+    twiml.hangup();
+  } else {
+    twiml.say(
+      { voice: "Polly.Joanna" },
+      `Please call ${memberName} back now if you are available.`
+    );
+  }
 
   return twiml.toString();
 }
@@ -32,11 +60,13 @@ function getParams(request: NextRequest) {
   return {
     transcript:
       searchParams.get("transcript") ??
-      "I'm feeling urges and I'm concerned I'm going to use.",
+      "They are feeling urges and are concerned about using.",
     memberName: searchParams.get("memberName") ?? "Frank",
     supporterMessage:
       searchParams.get("supporterMessage") ??
-      "Frank asked for support. Frank left this message.",
+      "Frank asked for support.",
+    sessionId: searchParams.get("sessionId") ?? "",
+    memberPhone: searchParams.get("memberPhone") ?? "",
   };
 }
 

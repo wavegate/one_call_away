@@ -2,7 +2,7 @@ import { DEMO_MEMBER_NAME, ESCALATION_KEYWORDS } from "./config";
 import type { AgentDecision } from "./types";
 
 const DEFAULT_MEMBER_RESPONSE =
-  "I hear you. I'm going to stay with you while I get help from your Circle. I'm contacting your support person now.";
+  "I hear you. I'm going to stay with you while I get help from My Circle. I'm contacting your support person now.";
 
 const HOLDING_RESPONSE =
   "You did the right thing by pressing the button. While I contact your support person, take one slow breath and stay with me.";
@@ -21,7 +21,7 @@ function ruleBasedDecision(transcript: string): AgentDecision {
       needsHuman: true,
       escalationPath: "call_supporter",
       memberResponse: `${DEFAULT_MEMBER_RESPONSE} ${HOLDING_RESPONSE}`,
-      supporterMessage: `${DEMO_MEMBER_NAME} asked for support. ${DEMO_MEMBER_NAME} left this message.`,
+      supporterMessage: `${DEMO_MEMBER_NAME} asked for support.`,
       shareVoiceMemo: true,
     };
   }
@@ -31,7 +31,7 @@ function ruleBasedDecision(transcript: string): AgentDecision {
     needsHuman: false,
     escalationPath: "none",
     memberResponse:
-      "Thank you for sharing. I'm here with you. If you need your Circle, you can press and hold the button again anytime.",
+      "Thank you for sharing. I'm here with you. If you need My Circle, you can press and hold the button again anytime.",
     supporterMessage: "",
     shareVoiceMemo: false,
   };

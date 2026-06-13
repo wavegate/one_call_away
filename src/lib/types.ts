@@ -10,7 +10,28 @@ export type EscalationStep =
   | "contacting"
   | "calling"
   | "delivered"
-  | "waiting";
+  | "waiting"
+  | "connected";
+
+export type CallMode = "sequential" | "parallel";
+
+export type SupporterStatus =
+  | "pending"
+  | "calling"
+  | "ringing"
+  | "listening"
+  | "declined"
+  | "confirmed"
+  | "unavailable";
+
+export interface SupporterAttempt {
+  id: string;
+  name: string;
+  relationship: string;
+  phone: string;
+  status: SupporterStatus;
+  callSid?: string;
+}
 
 export interface AgentDecision {
   urgency: "low" | "medium" | "high";

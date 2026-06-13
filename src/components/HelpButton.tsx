@@ -31,9 +31,6 @@ export function HelpButton({
       `}
       aria-label={isActive ? "Stop voice session" : "Start voice session"}
     >
-      {/* Subtle inner ring — one circle, not a thick band */}
-      <span className="pointer-events-none absolute inset-[15px] rounded-full border border-white/25" />
-
       {/* Soft highlight */}
       <span className="pointer-events-none absolute inset-0 rounded-full bg-[radial-gradient(circle_at_35%_30%,rgba(255,255,255,0.22),transparent_55%)]" />
 
